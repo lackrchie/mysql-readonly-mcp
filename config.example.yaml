@@ -1,16 +1,16 @@
 # 数据库只读查询 MCP —— 配置示例
 # 使用方法：复制本文件为 config.yaml，填入真实连接信息
 #   cp config.example.yaml config.yaml
-# config.yaml 已被 .gitignore 忽略，不会进入版本库
+# 真实密码只写进 config.yaml（已被 .gitignore 忽略）；本文件是提交到版本库的模板，请勿填真实凭据
 
 database:
-  # MySQL DSN，格式：用户名:密码@tcp(主机:端口)/数据库名?charset=utf8mb4
-  # 注意：无论这里填什么账号，服务都会强制会话级只读（transaction_read_only=1），
-  #       写操作会被 MySQL 服务端拒绝；但仍建议使用只读账号（建号 SQL 见 README）
-  dsn: "your_user:your_password@tcp(127.0.0.1:3306)/your_crm_db?charset=utf8mb4"
+  # MySQL/MariaDB DSN，格式：用户名:密码@tcp(主机:端口)/数据库名?charset=utf8mb4
+  # 只读兜底：每条查询都在只读事务（START TRANSACTION READ ONLY）中执行，写操作会被服务端拒绝；
+  #          仍建议使用只读账号（建号 SQL 见 README），多一道权限锁更稳妥
+  dsn: "your_user:your_password@tcp(127.0.0.1:3306)/your_db?charset=utf8mb4"
 
 query:
-  timeout_seconds: 10   # 单条查询超时（秒），同时设置客户端与服务端（max_execution_time）
+  timeout_seconds: 10   # 单条查询超时（秒），由客户端 context 控制，不依赖服务端变量
   max_rows: 500         # 返回行数上限，超出截断并在结果中标记 truncated=true
 
 security:
@@ -18,4 +18,4 @@ security:
   allowed_statements: ["SELECT", "SHOW", "EXPLAIN", "DESCRIBE", "DESC", "WITH"]
   # 表白名单：只允许查询这些表（list_tables 也只展示它们）；留空 [] 表示不限制
   # 按你的实际表名修改：
-  allowed_tables: ["customers", "orders"]
+  allowed_tables: []
