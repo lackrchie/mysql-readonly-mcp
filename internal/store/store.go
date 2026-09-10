@@ -79,6 +79,10 @@ func (s *Store) Query(ctx context.Context, sqlText string) (*QueryResult, error)
 	if !s.roTxUnsupported.Load() {
 		tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 		if err != nil {
+			// 超时/取消等瞬时错误直接返回，不能据此判定服务端不支持只读事务
+			if ctx.Err() != nil {
+				return nil, fmt.Errorf("开启只读事务失败：%w", err)
+			}
 			// 代理/老库不支持只读事务：记住并降级，只读由应用层白名单保证
 			s.roTxUnsupported.Store(true)
 		} else {

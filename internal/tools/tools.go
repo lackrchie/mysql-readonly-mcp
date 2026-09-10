@@ -87,7 +87,6 @@ func Register(server *mcp.Server, deps *Deps) {
 		}
 		sqlText += " ORDER BY table_name"
 		res, err := st.Query(ctx, sqlText)
-		_ = cfg
 		return nil, res, err
 	})
 

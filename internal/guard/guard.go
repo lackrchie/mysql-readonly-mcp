@@ -1,7 +1,8 @@
 // SQL 安全防线（应用层）：语句白名单、拒多语句、显式黑名单
 //
-// 注意：这只是纵深防御的一层。真正的兜底在 store 层——每个连接都被强制
-// 设置 transaction_read_only=1，写操作会被 MySQL 服务端直接拒绝。
+// 注意：这只是纵深防御的一层。服务端兜底在 store 层——每条查询在只读事务
+// （START TRANSACTION READ ONLY）中执行，写操作会被 MySQL 服务端拒绝；
+// 服务端不支持只读事务时，只读完全由本层白名单保证。
 package guard
 
 import (

@@ -29,11 +29,11 @@ vim config.yaml   # 填入 database.dsn
 # 2. 编译（改代码后需重新编译）
 go build -o db-mcp .
 
-# 3. 注册到 Claude Code（目录级，已完成）
-claude mcp add db-readonly -- /Users/yun/Downloads/rust-agent-source/db_mcp/db-mcp
+# 3. 注册到 Claude Code（在项目目录内执行，注册为目录级 MCP 服务）
+claude mcp add db-readonly -- "$(pwd)/db-mcp"
 
 # 4. 在本目录新开会话使用
-cd /Users/yun/Downloads/rust-agent-source/db_mcp && claude
+claude
 # 然后直接问："这个库里有哪些表？" "昨天的订单量是多少？"
 ```
 
@@ -46,14 +46,14 @@ cd /Users/yun/Downloads/rust-agent-source/db_mcp && claude
 | `explain_query` | 查看执行计划，跑重查询前评估代价 |
 | `run_query` | 执行只读 SQL，超时与行数截断保护 |
 
-## 安全设计（四层防线）
+## 安全设计（五层防线）
 
 | 层 | 机制 | 位置 | 防什么 |
 |---|---|---|---|
-| 1 | **会话级只读** `transaction_read_only=1`，代码强制注入 DSN，配置改不掉 | `store/store.go` | 兜底：即使账号有全量权限、即使白名单被绕过，UPDATE/DELETE/DDL 都会被 **MySQL 服务端**拒绝 |
+| 1 | **只读事务兜底**：每条查询在 `START TRANSACTION READ ONLY` 中执行（兼容代理与老版本；不支持时降级为普通查询，只读由第 2 层保证） | `store/store.go` | 兜底：即使账号有全量权限、即使白名单被绕过，UPDATE/DELETE/DDL 都会被 **MySQL 服务端**拒绝 |
 | 2 | 语句白名单：仅 SELECT/SHOW/EXPLAIN/DESCRIBE/WITH；拒多语句与分号；剥离注释防伪装（含 `/*!*/` 版本注释）；WITH 语句检测 CTE 后接写语句 | `guard/guard.go` | prompt 注入诱导写操作 |
 | 3 | 显式黑名单：`INTO OUTFILE/DUMPFILE`（写服务器文件，只读事务拦不住）、`LOAD_FILE`（读服务器文件）、`FOR UPDATE`/`LOCK IN SHARE MODE`（加锁阻塞业务）、`SLEEP`/`BENCHMARK`/`GET_LOCK`（拖库） | `guard/guard.go` | 只读事务管不到的危险姿势 |
-| 4 | 资源限制：客户端超时 + 服务端 `max_execution_time` + 行数截断 + 连接池上限 3 | `store/store.go` | 大查询拖垮生产库、海量结果撑爆上下文 |
+| 4 | 资源限制：客户端超时（context 控制，不依赖服务端变量）+ 行数截断 + 连接池上限 3 | `store/store.go` | 大查询拖垮生产库、海量结果撑爆上下文 |
 | 5 | **表白名单**（`allowed_tables` 配置）：run_query/explain_query 中引用白名单外的表被拒（含子查询、派生表、JOIN、CTE 体内的引用），list_tables 只展示白名单内的表，describe_table 同样受限 | `guard/tables.go` | 缩小可见面：CRM 库里其他表连读都读不了 |
 
 跑安全测试：`go test ./internal/guard/ -v`
